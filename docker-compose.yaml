@@ -1,0 +1,37 @@
+version: '3.8'
+
+services:
+  backend:
+    build:
+      context: .
+      dockerfile: Dockerfile.backend
+    environment:
+      - PAYSTACK_SECRET_KEY=${PAYSTACK_SECRET_KEY}
+      - TREASURY_ADDRESS=${TREASURY_ADDRESS}
+      - FRONTEND_URL=${FRONTEND_URL}
+    expose:
+      - "3000"
+    networks:
+      - bundle-network
+    restart: unless-stopped
+
+  nginx-proxy:
+    build:
+      context: . # <-- IMPORTANT: Build context is now the root directory
+      dockerfile: nginx/Dockerfile
+      # Pass the VITE variables as build arguments directly to the Nginx build
+      args:
+        - VITE_TREASURY_ADDRESS=${VITE_TREASURY_ADDRESS}
+        - VITE_API_URL=/api
+        - VITE_APP_URL=${VITE_APP_URL}
+    restart: unless-stopped
+    ports:
+      - "8085:80"
+    depends_on:
+      - backend
+    networks:
+      - bundle-network
+
+networks:
+  bundle-network:
+    driver: bridge

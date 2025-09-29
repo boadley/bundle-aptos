@@ -1,0 +1,25 @@
+{
+  "name": "backend",
+  "version": "1.0.0",
+  "main": "src/app.js",
+  "scripts": {
+    "start": "node src/app.js",
+    "dev": "nodemon src/app.js"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "@aptos-labs/ts-sdk": "^5.1.0",
+    "axios": "^1.12.2",
+    "cors": "^2.8.5",
+    "dotenv": "^17.2.2",
+    "express": "^5.1.0",
+    "uuid": "^13.0.0"
+  },
+  "devDependencies": {
+    "node-fetch": "^3.3.2",
+    "nodemon": "^3.1.10"
+  },
+  "description": ""
+}
