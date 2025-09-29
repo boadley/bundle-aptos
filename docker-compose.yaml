@@ -27,7 +27,7 @@ services:
         - VITE_APP_URL=${VITE_APP_URL}
     restart: unless-stopped
     ports:
-      - "8085:80"
+      - "8087:80"
     depends_on:
       - backend
     networks:
