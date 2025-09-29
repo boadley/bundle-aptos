@@ -10,7 +10,7 @@
 |---|---|
 | 🚀 **Live App Demo** | [bundle-aptos.splashycm.xyz](https://bundle-aptos.splashycm.xyz) (_Optimized for mobile_) |
 | 🎬 **Watch the 3-Min Video Pitch** | [Watch on YouTube](https://youtube.com/shorts/KMTt3MfA0Qs?feature=share) |
-| 📊 **View the Pitch Deck** | [Pitch Deck Link](https://the-disconnect-555klw8.gamma.site/) |
+| 📊 **View the Pitch Deck** | [Pitch Deck Link](https://the-future-is-bundled-ap-ppk4lx9.gamma.site/) |
 
 ---
 
