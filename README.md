@@ -8,7 +8,7 @@
 
 | **Quick Links** | |
 |---|---|
-| 🚀 **Live App Demo** | [bundle.splashycm.xyz](https://bundle.splashycm.xyz) (_Optimized for mobile_) |
+| 🚀 **Live App Demo** | [bundle-aptos.splashycm.xyz](https://bundle-aptos.splashycm.xyz) (_Optimized for mobile_) |
 | 🎬 **Watch the 3-Min Video Pitch** | [Watch on YouTube](https://youtube.com/shorts/KMTt3MfA0Qs?feature=share) |
 | 📊 **View the Pitch Deck** | [Pitch Deck Link](https://the-disconnect-555klw8.gamma.site/) |
 
@@ -70,7 +70,7 @@ Bundle is designed as a super-app ecosystem to address all four hackathon tracks
 ## 🚀 Getting Started
 
 To run this project locally, please follow these steps:
-1.  Clone the repository: `git clone https://github.com/boadley/bundle.git`
+1.  Clone the repository: `git clone https://github.com/boadley/bundle-aptos.git`
 2.  Install backend dependencies: `cd backend && npm install`
 3.  Install frontend dependencies: `cd frontend && npm install`
 4.  Create and configure your `.env` files in both directories using the `.env.example` as a guide.
