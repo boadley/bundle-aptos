@@ -136,9 +136,6 @@ export class PetraDeepLinkService {
     return bytes;
   }
 
-  private arrayToHex(array: Uint8Array): string {
-    return Array.from(array, byte => byte.toString(16).padStart(2, '0')).join('');
-  }
 
   // Setup deep link listener for handling Petra responses
   private setupDeepLinkListener() {
