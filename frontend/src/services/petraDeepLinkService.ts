@@ -118,6 +118,28 @@ export class PetraDeepLinkService {
     return new Uint8Array(atob(base64).split('').map(char => char.charCodeAt(0)));
   }
 
+  // Utility function for hex conversion
+  private hexToArray(hex: string): Uint8Array {
+    // Remove 0x prefix if present
+    const cleanHex = hex.startsWith('0x') ? hex.slice(2) : hex;
+    
+    // Validate hex string
+    if (!/^[0-9a-fA-F]*$/.test(cleanHex)) {
+      throw new Error(`Invalid hex string: ${hex}`);
+    }
+    
+    // Convert hex to Uint8Array
+    const bytes = new Uint8Array(cleanHex.length / 2);
+    for (let i = 0; i < cleanHex.length; i += 2) {
+      bytes[i / 2] = parseInt(cleanHex.substr(i, 2), 16);
+    }
+    return bytes;
+  }
+
+  private arrayToHex(array: Uint8Array): string {
+    return Array.from(array, byte => byte.toString(16).padStart(2, '0')).join('');
+  }
+
   // Setup deep link listener for handling Petra responses
   private setupDeepLinkListener() {
     // Listen for URL changes (for web-based deep linking)
@@ -179,13 +201,19 @@ export class PetraDeepLinkService {
       const responseData = JSON.parse(atob(data));
       const { petraPublicEncryptedKey, address } = responseData;
 
+      console.log('Connection approval data:', { petraPublicEncryptedKey, address });
+
       // Generate shared encryption key
+      // petraPublicEncryptedKey is a hex string, so we need to convert it properly
       const publicKeyHex = petraPublicEncryptedKey.startsWith('0x') 
         ? petraPublicEncryptedKey.slice(2) 
         : petraPublicEncryptedKey;
       
+      // Use hexToArray instead of base64ToArray since this is a hex string
+      const petraPublicKeyBytes = this.hexToArray(publicKeyHex);
+      
       const sharedEncryptionSecretKey = nacl.box.before(
-        this.base64ToArray(publicKeyHex),
+        petraPublicKeyBytes,
         this.connectionState.secretKey
       );
 
@@ -197,9 +225,9 @@ export class PetraDeepLinkService {
       this.notifyListeners();
 
       toast.success('Successfully connected to Petra wallet!');
-    } catch (error) {
+    } catch (error: any) {
       console.error('Connection approval failed:', error);
-      toast.error('Failed to establish secure connection with Petra wallet');
+      toast.error(`Failed to establish secure connection with Petra wallet: ${error?.message || 'Unknown error'}`);
       this.clearConnectionState();
     }
   }

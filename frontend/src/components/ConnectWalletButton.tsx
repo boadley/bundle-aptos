@@ -44,7 +44,6 @@ export default function ConnectWalletButton() {
   const handleConnect = async () => {
     try {
       // PRIORITY: Always try standard wallet adapter first (works on desktop and mobile in-app browser)
-      // Only use deep linking as a last resort for mobile devices without wallet extension
       
       if (petraWallet && petraWallet.readyState === WalletReadyState.Installed) {
         // Petra wallet is detected - use standard connection (best for both desktop and mobile)
@@ -60,12 +59,13 @@ export default function ConnectWalletButton() {
       
       // Wallet not detected
       if (isMobile) {
-        // On mobile without wallet detected, use deep linking
-        toast('Opening Petra app for secure connection...', {
+        // On mobile without wallet extension detected, use deep linking for secure connection
+        toast('Opening Petra app to connect...', {
           icon: '📱',
           duration: 2000,
         });
         
+        // Use proper Petra deep linking protocol for connection
         await petraDeepLinkService.connect();
         return;
       }
@@ -85,7 +85,8 @@ export default function ConnectWalletButton() {
       } else if (error?.message?.includes('network')) {
         errorMessage = 'Network error. Please check your connection.';
       } else if (error?.message?.includes('Deep linking is only available on mobile')) {
-        errorMessage = 'Please use Petra browser extension on desktop';
+        // If deep linking fails, provide instructions
+        errorMessage = 'Please open this app in Petra wallet\'s browser or install Petra app.';
       }
       
       toast.error(errorMessage);
