@@ -201,13 +201,24 @@ export class PetraDeepLinkService {
       console.log('Connection approval data:', { petraPublicEncryptedKey, address });
 
       // Generate shared encryption key
-      // petraPublicEncryptedKey is a hex string, so we need to convert it properly
-      const publicKeyHex = petraPublicEncryptedKey.startsWith('0x') 
-        ? petraPublicEncryptedKey.slice(2) 
-        : petraPublicEncryptedKey;
+      // petraPublicEncryptedKey is actually a base64 string, not hex
+      // First, let's try to determine the format by checking the content
+      let petraPublicKeyBytes: Uint8Array;
       
-      // Use hexToArray instead of base64ToArray since this is a hex string
-      const petraPublicKeyBytes = this.hexToArray(publicKeyHex);
+      try {
+        // Try base64 first (most likely format based on error message)
+        petraPublicKeyBytes = this.base64ToArray(petraPublicEncryptedKey);
+      } catch (base64Error) {
+        try {
+          // If base64 fails, try hex format
+          const publicKeyHex = petraPublicEncryptedKey.startsWith('0x') 
+            ? petraPublicEncryptedKey.slice(2) 
+            : petraPublicEncryptedKey;
+          petraPublicKeyBytes = this.hexToArray(publicKeyHex);
+        } catch (hexError) {
+          throw new Error(`Unable to parse petraPublicEncryptedKey as base64 or hex: ${petraPublicEncryptedKey}`);
+        }
+      }
       
       const sharedEncryptionSecretKey = nacl.box.before(
         petraPublicKeyBytes,
