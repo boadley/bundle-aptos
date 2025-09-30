@@ -18,7 +18,7 @@ const NODIT_API_KEY = process.env.NODIT_API_KEY || 'nodit-demo'; // Default for 
 
 // Poll interval and timeout for tx confirmation (in ms)
 const POLL_INTERVAL = 2000; // 2s
-const POLL_TIMEOUT = 60000; // 60s
+const POLL_TIMEOUT = 6000; // 60s
 const MAX_RETRIES = 3; // Maximum retries for network errors
 
 class AptosService {
