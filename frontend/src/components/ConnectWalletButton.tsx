@@ -1,15 +1,18 @@
-// Aptos-only wallet connection button
-// Refactored from AppKit to useWallet hook for connection/disconnect
-// On mobile, checks for Petra installation; if not, uses deeplink to open/install Petra app
+// Enhanced wallet connection button with proper Petra mobile deep linking
+// Supports both standard wallet adapter and mobile deep linking
+// Uses Petra deep link service for secure mobile-to-mobile communication
 
 import { useWallet, groupAndSortWallets } from '@aptos-labs/wallet-adapter-react';
 import { WalletReadyState } from '@aptos-labs/wallet-adapter-react';
 import { toast } from 'react-hot-toast';
+import { useState, useEffect } from 'react';
+import { petraDeepLinkService, type PetraConnectionState } from '../services/petraDeepLinkService';
 
 export default function ConnectWalletButton() {
   const { connect, disconnect, connected, account, wallets, notDetectedWallets } = useWallet();
+  const [deepLinkState, setDeepLinkState] = useState<PetraConnectionState>({ isConnected: false });
 
-  // Detect mobile device (user agent or screen width for responsiveness)
+  // Detect mobile device
   const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent) || window.innerWidth < 768;
 
   // Group and sort wallets to access Petra's deeplinkProvider for mobile
@@ -17,33 +20,58 @@ export default function ConnectWalletButton() {
   const petraWallets = [...groupedWallets.availableWallets, ...groupedWallets.installableWallets].filter(w => w.name === "Petra");
   const petraWallet = petraWallets[0];
 
+  // Subscribe to deep link state changes
+  useEffect(() => {
+    const unsubscribe = petraDeepLinkService.onStateChange(setDeepLinkState);
+    
+    // Get initial state
+    setDeepLinkState(petraDeepLinkService.getConnectionState());
+    
+    return unsubscribe;
+  }, []);
+
+  // Clear deep link state when standard wallet connects to prevent conflicts
+  useEffect(() => {
+    if (connected && account && deepLinkState.isConnected) {
+      console.log('Standard wallet connected - clearing deep link state to prevent conflicts');
+      // Silently clear deep link state without triggering disconnect flow
+      petraDeepLinkService.disconnect().catch(err => {
+        console.log('Error clearing deep link state:', err);
+      });
+    }
+  }, [connected, account, deepLinkState.isConnected]);
+
   const handleConnect = async () => {
     try {
-      if (isMobile && petraWallet && petraWallet.readyState !== WalletReadyState.Installed) {
-        // Mobile deeplinking: Redirect to Petra app/explore for installation or open if not detected
-        toast('Redirecting to Petra wallet...', {
+      // PRIORITY: Always try standard wallet adapter first (works on desktop and mobile in-app browser)
+      // Only use deep linking as a last resort for mobile devices without wallet extension
+      
+      if (petraWallet && petraWallet.readyState === WalletReadyState.Installed) {
+        // Petra wallet is detected - use standard connection (best for both desktop and mobile)
+        toast('Connecting to Petra wallet...', {
+          icon: '🔗',
+          duration: 2000,
+        });
+        
+        await connect("Petra");
+        toast.success('Wallet connected successfully!');
+        return;
+      }
+      
+      // Wallet not detected
+      if (isMobile) {
+        // On mobile without wallet detected, use deep linking
+        toast('Opening Petra app for secure connection...', {
           icon: '📱',
           duration: 2000,
         });
         
-        const deepLinkProvider = (petraWallet as any).deeplinkProvider || 'https://petra.app/explore?link=';
-        const deepLinkUrl = deepLinkProvider + encodeURIComponent(window.location.href);
-        
-        // Small delay to show the toast before redirect
-        setTimeout(() => {
-          window.location.href = deepLinkUrl;
-        }, 500);
+        await petraDeepLinkService.connect();
         return;
       }
       
-      // Standard connect to Petra wallet on desktop or in-app browser
-      toast('Connecting to Petra wallet...', {
-        icon: '🔗',
-        duration: 2000,
-      });
-      
-      await connect("Petra");
-      toast.success('Wallet connected successfully!');
+      // Desktop without wallet - show error
+      toast.error('Petra wallet not found. Please install Petra wallet extension.');
     } catch (error: any) {
       console.error("Connection failed:", error);
       
@@ -56,6 +84,8 @@ export default function ConnectWalletButton() {
         errorMessage = 'Petra wallet not found. Please install Petra wallet.';
       } else if (error?.message?.includes('network')) {
         errorMessage = 'Network error. Please check your connection.';
+      } else if (error?.message?.includes('Deep linking is only available on mobile')) {
+        errorMessage = 'Please use Petra browser extension on desktop';
       }
       
       toast.error(errorMessage);
@@ -64,7 +94,15 @@ export default function ConnectWalletButton() {
 
   const handleDisconnect = async () => {
     try {
-      await disconnect();
+      // Disconnect from both standard wallet and deep link service
+      if (connected) {
+        await disconnect();
+      }
+      
+      if (deepLinkState.isConnected) {
+        await petraDeepLinkService.disconnect();
+      }
+      
       toast.success('Wallet disconnected');
     } catch (error) {
       console.error("Disconnect failed:", error);
@@ -72,25 +110,39 @@ export default function ConnectWalletButton() {
     }
   };
 
-  if (connected && account) {
-    // Show disconnected button with truncated Aptos account address
+  // Check if we're connected via either method
+  const isConnected = connected || deepLinkState.isConnected;
+  const displayAddress = account?.address?.toString() || deepLinkState.walletAddress;
+
+  if (isConnected && displayAddress) {
+    // Show disconnect button with truncated address
     return (
       <button
         onClick={handleDisconnect}
         className="text-white bg-transparent border border-disabled px-4 py-2 rounded-lg hover:bg-white/10 transition-colors text-sm"
       >
-        {account.address.toString().slice(0, 6)}...{account.address.toString().slice(-4)}
+        {displayAddress.slice(0, 6)}...{displayAddress.slice(-4)}
       </button>
     );
   }
 
-  // Connect button with conditional text for mobile Petra
+  // Connect button with conditional text for mobile
+  const getButtonText = () => {
+    if (isMobile) {
+      if (petraWallet && petraWallet.readyState === WalletReadyState.Installed) {
+        return "Connect Petra";
+      }
+      return "Open Petra App";
+    }
+    return "Connect Wallet";
+  };
+
   return (
     <button
       onClick={handleConnect}
       className="btn-primary"
     >
-      {isMobile && petraWallet && petraWallet.readyState !== WalletReadyState.Installed ? "Open Petra App" : "Connect Wallet"}
+      {getButtonText()}
     </button>
   );
 }

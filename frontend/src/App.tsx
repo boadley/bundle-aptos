@@ -5,12 +5,28 @@ import { Toaster } from 'react-hot-toast';
 import LoginPage from './pages/LoginPage';
 import HomePage from './pages/HomePage';
 import StatusPage from './components/StatusPage';
+import TestDeepLinkPage from './pages/TestDeepLinkPage';
+import { petraDeepLinkService } from './services/petraDeepLinkService';
 
 function App() {
   const { connected, account } = useWallet();
 
+  // Check for deep link connection state
+  const deepLinkState = petraDeepLinkService.getConnectionState();
+  const isConnected = connected || deepLinkState.isConnected;
+
+  // Allow access to test page regardless of connection status
+  if (window.location.pathname === '/test-deeplink') {
+    return (
+      <>
+        <Toaster />
+        <TestDeepLinkPage />
+      </>
+    );
+  }
+
   // Check if wallet is connected: connected state is true and account exists (Aptos-specific)
-  if (!connected || !account) {
+  if (!isConnected || (!account && !deepLinkState.walletAddress)) {
     return (
       <>
         <Toaster />
@@ -25,6 +41,7 @@ function App() {
       <Routes>
         <Route path="/" element={<HomePage />} />
         <Route path="/status" element={<StatusPage />} />
+        <Route path="/test-deeplink" element={<TestDeepLinkPage />} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
     </>
