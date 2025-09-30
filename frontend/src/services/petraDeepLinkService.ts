@@ -210,34 +210,64 @@ export class PetraDeepLinkService {
 
   private handleConnectionApproval(data: string | null) {
     try {
+      console.log('🔍 DEBUG: Handling connection approval');
+      console.log('🔍 DEBUG: Raw data received:', data);
+
       if (!data) throw new Error('Missing data from Petra response');
       if (!this.connectionState.secretKey) throw new Error('Missing secret key');
 
-      const responseData = JSON.parse(atob(data));
+      console.log('🔍 DEBUG: Data length:', data.length);
+      console.log('🔍 DEBUG: First 100 chars of data:', data.substring(0, 100));
+
+      let decodedData: string;
+      try {
+        decodedData = atob(data);
+        console.log('🔍 DEBUG: Decoded data:', decodedData);
+      } catch (decodeError) {
+        console.error('❌ Base64 decode failed:', decodeError);
+        throw new Error(`Base64 decode failed: ${decodeError}`);
+      }
+
+      let responseData: any;
+      try {
+        responseData = JSON.parse(decodedData);
+        console.log('🔍 DEBUG: Parsed response data:', JSON.stringify(responseData, null, 2));
+      } catch (parseError) {
+        console.error('❌ JSON parse failed:', parseError);
+        console.error('❌ Failed to parse:', decodedData);
+        throw new Error(`JSON parse failed: ${parseError}`);
+      }
+
       const { petraPublicEncryptedKey, address } = responseData;
 
       if (!petraPublicEncryptedKey || !address) {
         throw new Error('Invalid data structure in Petra response');
       }
 
+      console.log('🔍 DEBUG: Petra public key (hex):', petraPublicEncryptedKey);
+      console.log('🔍 DEBUG: Address:', address);
+
       // FIXED: The key from Petra should be in hex format. Decode it to bytes.
       const petraPublicKeyBytes = this.hexToArray(petraPublicEncryptedKey);
-      
+      console.log('🔍 DEBUG: Petra public key bytes length:', petraPublicKeyBytes.length);
+
       const sharedEncryptionSecretKey = nacl.box.before(
         petraPublicKeyBytes,
         this.connectionState.secretKey
       );
+      console.log('🔍 DEBUG: Generated shared key successfully');
 
       this.connectionState.sharedKey = sharedEncryptionSecretKey;
       this.connectionState.isConnected = true;
       this.connectionState.walletAddress = address;
-      
+
       this.saveConnectionState();
       this.notifyListeners();
 
       toast.success('Successfully connected to Petra wallet!');
     } catch (error: any) {
-      console.error('Connection approval failed:', error);
+      console.error('❌ Connection approval failed:', error);
+      console.error('❌ Error stack:', error.stack);
       toast.error(`Failed to connect with Petra: ${error?.message || 'Unknown error'}`);
       this.clearConnectionState();
     }
@@ -249,16 +279,42 @@ export class PetraDeepLinkService {
   }
 
   private handleTransactionResponse(params: URLSearchParams) {
+    console.log('🔍 DEBUG: Handling transaction response');
+    console.log('🔍 DEBUG: Response params:', Object.fromEntries(params));
+
     if (params.get('response') === 'approved' && params.get('data')) {
       try {
-        const responseData = JSON.parse(atob(params.get('data')!));
+        const data = params.get('data')!;
+        console.log('🔍 DEBUG: Transaction data received:', data);
+        console.log('🔍 DEBUG: Data length:', data.length);
+
+        let decodedData: string;
+        try {
+          decodedData = atob(data);
+          console.log('🔍 DEBUG: Decoded transaction data:', decodedData);
+        } catch (decodeError) {
+          console.error('❌ Base64 decode failed for transaction:', decodeError);
+          throw new Error(`Base64 decode failed: ${decodeError}`);
+        }
+
+        let responseData: any;
+        try {
+          responseData = JSON.parse(decodedData);
+          console.log('🔍 DEBUG: Parsed transaction response:', JSON.stringify(responseData, null, 2));
+        } catch (parseError) {
+          console.error('❌ JSON parse failed for transaction:', parseError);
+          console.error('❌ Failed to parse transaction data:', decodedData);
+          throw new Error(`JSON parse failed: ${parseError}`);
+        }
+
         toast.success('Transaction signed successfully!');
         window.dispatchEvent(new CustomEvent('petraTransactionSigned', { detail: responseData }));
       } catch (error) {
-        console.error('Failed to parse transaction response:', error);
+        console.error('❌ Failed to parse transaction response:', error);
         toast.error('Failed to process transaction response.');
       }
     } else {
+      console.log('🔍 DEBUG: Transaction rejected or no data');
       toast.error('Transaction rejected by user.');
     }
   }
@@ -331,36 +387,52 @@ export class PetraDeepLinkService {
     }
 
     try {
+      console.log('🔍 DEBUG: Starting transaction signing process');
+      console.log('🔍 DEBUG: Original payload:', payload);
+
       const nonce = nacl.randomBytes(24);
+      console.log('🔍 DEBUG: Generated nonce (hex):', this.arrayToHex(nonce));
 
       // Convert the transaction payload to the proper hex format that Petra expects
-      // This creates a hex string representation of the transaction payload
       const payloadHex = this.transactionPayloadToHex(payload);
+      console.log('🔍 DEBUG: Payload hex:', payloadHex);
+      console.log('🔍 DEBUG: Payload hex length:', payloadHex.length);
 
       // Convert hex string to bytes for encryption
       const payloadBytes = this.hexToArray(payloadHex);
+      console.log('🔍 DEBUG: Payload bytes length:', payloadBytes.length);
 
       const encryptedPayload = nacl.box.after(
         payloadBytes,
         nonce,
         this.connectionState.sharedKey
       );
+      console.log('🔍 DEBUG: Encrypted payload (hex):', this.arrayToHex(encryptedPayload));
 
       const data = {
         appInfo: APP_INFO,
-        // FIXED: Use hex encoding for payload, publicKey, and nonce.
         payload: this.arrayToHex(encryptedPayload),
         redirectLink: `${DAPP_LINK_BASE}/response`,
         dappEncryptionPublicKey: this.arrayToHex(this.connectionState.publicKey),
         nonce: this.arrayToHex(nonce)
       };
 
-      const deepLinkUrl = `${PETRA_LINK_BASE}/signAndSubmit?data=${btoa(JSON.stringify(data))}`;
+      console.log('🔍 DEBUG: Data object to send:', JSON.stringify(data, null, 2));
+
+      const dataString = JSON.stringify(data);
+      console.log('🔍 DEBUG: Data string length:', dataString.length);
+
+      const base64Data = btoa(dataString);
+      console.log('🔍 DEBUG: Base64 data (first 100 chars):', base64Data.substring(0, 100));
+
+      const deepLinkUrl = `${PETRA_LINK_BASE}/signAndSubmit?data=${base64Data}`;
+      console.log('🔍 DEBUG: Final deep link URL:', deepLinkUrl);
 
       toast('Opening Petra to sign transaction...', { icon: '✍️' });
       window.location.href = deepLinkUrl;
     } catch (error: any) {
-      console.error('Transaction signing failed:', error);
+      console.error('❌ Transaction signing failed:', error);
+      console.error('❌ Error stack:', error.stack);
       toast.error(`Transaction signing failed: ${error?.message || 'Unknown error'}`);
       throw error;
     }
