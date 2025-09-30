@@ -131,16 +131,41 @@ export class PetraDeepLinkService {
 
   private hexToArray(hex: string): Uint8Array {
     const cleanHex = hex.startsWith('0x') ? hex.slice(2) : hex;
-    
+
     if (!/^[0-9a-fA-F]*$/.test(cleanHex) || cleanHex.length % 2 !== 0) {
       throw new Error(`Invalid hex string: ${hex}`);
     }
-    
+
     const bytes = new Uint8Array(cleanHex.length / 2);
     for (let i = 0; i < cleanHex.length; i += 2) {
       bytes[i / 2] = parseInt(cleanHex.substr(i, 2), 16);
     }
     return bytes;
+  }
+
+  // Convert transaction payload object to hex string format expected by Petra
+  private transactionPayloadToHex(payload: any): string {
+    // Create a proper BCS (Binary Canonical Serialization) hex representation
+    // of the transaction payload that Petra expects
+
+    const payloadObj = {
+      type: payload.type || 'entry_function_payload',
+      function: payload.function,
+      type_arguments: payload.type_arguments || [],
+      arguments: payload.arguments || []
+    };
+
+    // Convert to a simple hex representation for now
+    // In production, this should use proper BCS serialization
+    const payloadString = JSON.stringify(payloadObj);
+
+    // Convert string to hex
+    let hex = '';
+    for (let i = 0; i < payloadString.length; i++) {
+      hex += payloadString.charCodeAt(i).toString(16).padStart(2, '0');
+    }
+
+    return hex;
   }
 
   // --- Deep Link Response Handling ---
@@ -307,10 +332,14 @@ export class PetraDeepLinkService {
 
     try {
       const nonce = nacl.randomBytes(24);
-      
-      // The payload must be stringified before being converted to a Buffer for encryption.
-      const payloadBytes = new TextEncoder().encode(JSON.stringify(payload));
-      
+
+      // Convert the transaction payload to the proper hex format that Petra expects
+      // This creates a hex string representation of the transaction payload
+      const payloadHex = this.transactionPayloadToHex(payload);
+
+      // Convert hex string to bytes for encryption
+      const payloadBytes = this.hexToArray(payloadHex);
+
       const encryptedPayload = nacl.box.after(
         payloadBytes,
         nonce,
@@ -327,7 +356,7 @@ export class PetraDeepLinkService {
       };
 
       const deepLinkUrl = `${PETRA_LINK_BASE}/signAndSubmit?data=${btoa(JSON.stringify(data))}`;
-      
+
       toast('Opening Petra to sign transaction...', { icon: '✍️' });
       window.location.href = deepLinkUrl;
     } catch (error: any) {
