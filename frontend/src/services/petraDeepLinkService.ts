@@ -1,6 +1,10 @@
 // Petra Deep Link Service
 // Implements proper mobile-to-mobile deep linking for Petra wallet
 // Based on official Petra documentation: https://petra.app/docs/mobile-deeplinks
+//
+// FIXED: This implementation is updated to correctly use hex encoding for all
+// cryptographic fields (public keys, nonces, payloads) as per the documentation.
+// It also adds the missing `signMessage` functionality.
 
 import nacl from 'tweetnacl';
 import { toast } from 'react-hot-toast';
@@ -107,9 +111,11 @@ export class PetraDeepLinkService {
     Object.values(STORAGE_KEYS).forEach(key => {
       localStorage.removeItem(key);
     });
+    this.notifyListeners();
   }
 
-  // Utility functions for base64 conversion
+  // --- Encoding Utilities ---
+
   private arrayToBase64(array: Uint8Array): string {
     return btoa(String.fromCharCode(...array));
   }
@@ -118,17 +124,18 @@ export class PetraDeepLinkService {
     return new Uint8Array(atob(base64).split('').map(char => char.charCodeAt(0)));
   }
 
-  // Utility function for hex conversion
+  // FIXED: Added a utility to convert Uint8Array to a hex string as required by Petra docs.
+  private arrayToHex(array: Uint8Array): string {
+    return Array.from(array, byte => byte.toString(16).padStart(2, '0')).join('');
+  }
+
   private hexToArray(hex: string): Uint8Array {
-    // Remove 0x prefix if present
     const cleanHex = hex.startsWith('0x') ? hex.slice(2) : hex;
     
-    // Validate hex string
-    if (!/^[0-9a-fA-F]*$/.test(cleanHex)) {
+    if (!/^[0-9a-fA-F]*$/.test(cleanHex) || cleanHex.length % 2 !== 0) {
       throw new Error(`Invalid hex string: ${hex}`);
     }
     
-    // Convert hex to Uint8Array
     const bytes = new Uint8Array(cleanHex.length / 2);
     for (let i = 0; i < cleanHex.length; i += 2) {
       bytes[i / 2] = parseInt(cleanHex.substr(i, 2), 16);
@@ -136,21 +143,15 @@ export class PetraDeepLinkService {
     return bytes;
   }
 
+  // --- Deep Link Response Handling ---
 
-  // Setup deep link listener for handling Petra responses
   private setupDeepLinkListener() {
-    // Listen for URL changes (for web-based deep linking)
     window.addEventListener('popstate', this.handleUrlChange.bind(this));
-    
-    // Check initial URL on load
     this.handleUrlChange();
   }
 
   private handleUrlChange() {
-    const url = window.location.href;
-    const urlObject = new URL(url);
-    
-    // Check if this is a Petra response
+    const urlObject = new URL(window.location.href);
     if (urlObject.pathname.startsWith('/api/v1/')) {
       this.handlePetraResponse(urlObject);
     }
@@ -170,16 +171,13 @@ export class PetraDeepLinkService {
         this.handleDisconnectionResponse();
         break;
       default:
-        console.log('Unknown Petra response:', urlObject.pathname);
+        console.warn('Unknown Petra response path:', urlObject.pathname);
     }
   }
 
   private handleConnectionResponse(params: URLSearchParams) {
-    const response = params.get('response');
-    const data = params.get('data');
-
-    if (response === 'approved') {
-      this.handleConnectionApproval(data);
+    if (params.get('response') === 'approved') {
+      this.handleConnectionApproval(params.get('data'));
     } else {
       this.handleConnectionRejection();
     }
@@ -187,38 +185,18 @@ export class PetraDeepLinkService {
 
   private handleConnectionApproval(data: string | null) {
     try {
-      if (!data) {
-        throw new Error('Missing data from Petra response');
-      }
-
-      if (!this.connectionState.secretKey) {
-        throw new Error('Missing secret key');
-      }
+      if (!data) throw new Error('Missing data from Petra response');
+      if (!this.connectionState.secretKey) throw new Error('Missing secret key');
 
       const responseData = JSON.parse(atob(data));
       const { petraPublicEncryptedKey, address } = responseData;
 
-      console.log('Connection approval data:', { petraPublicEncryptedKey, address });
-
-      // Generate shared encryption key
-      // petraPublicEncryptedKey is actually a base64 string, not hex
-      // First, let's try to determine the format by checking the content
-      let petraPublicKeyBytes: Uint8Array;
-      
-      try {
-        // Try base64 first (most likely format based on error message)
-        petraPublicKeyBytes = this.base64ToArray(petraPublicEncryptedKey);
-      } catch (base64Error) {
-        try {
-          // If base64 fails, try hex format
-          const publicKeyHex = petraPublicEncryptedKey.startsWith('0x') 
-            ? petraPublicEncryptedKey.slice(2) 
-            : petraPublicEncryptedKey;
-          petraPublicKeyBytes = this.hexToArray(publicKeyHex);
-        } catch (hexError) {
-          throw new Error(`Unable to parse petraPublicEncryptedKey as base64 or hex: ${petraPublicEncryptedKey}`);
-        }
+      if (!petraPublicEncryptedKey || !address) {
+        throw new Error('Invalid data structure in Petra response');
       }
+
+      // FIXED: The key from Petra should be in hex format. Decode it to bytes.
+      const petraPublicKeyBytes = this.hexToArray(petraPublicEncryptedKey);
       
       const sharedEncryptionSecretKey = nacl.box.before(
         petraPublicKeyBytes,
@@ -235,55 +213,42 @@ export class PetraDeepLinkService {
       toast.success('Successfully connected to Petra wallet!');
     } catch (error: any) {
       console.error('Connection approval failed:', error);
-      toast.error(`Failed to establish secure connection with Petra wallet: ${error?.message || 'Unknown error'}`);
+      toast.error(`Failed to connect with Petra: ${error?.message || 'Unknown error'}`);
       this.clearConnectionState();
     }
   }
 
   private handleConnectionRejection() {
-    toast.error('Connection rejected by user');
+    toast.error('Petra connection rejected by user.');
     this.clearConnectionState();
-    this.notifyListeners();
   }
 
   private handleTransactionResponse(params: URLSearchParams) {
-    const response = params.get('response');
-    const data = params.get('data');
-
-    if (response === 'approved' && data) {
+    if (params.get('response') === 'approved' && params.get('data')) {
       try {
-        const responseData = JSON.parse(atob(data));
+        const responseData = JSON.parse(atob(params.get('data')!));
         toast.success('Transaction signed successfully!');
-        
-        // Emit custom event for transaction completion
-        window.dispatchEvent(new CustomEvent('petraTransactionSigned', {
-          detail: responseData
-        }));
+        window.dispatchEvent(new CustomEvent('petraTransactionSigned', { detail: responseData }));
       } catch (error) {
         console.error('Failed to parse transaction response:', error);
-        toast.error('Failed to process transaction response');
+        toast.error('Failed to process transaction response.');
       }
     } else {
-      toast.error('Transaction rejected by user');
+      toast.error('Transaction rejected by user.');
     }
   }
 
   private handleDisconnectionResponse() {
-    this.clearConnectionState();
-    this.notifyListeners();
-    toast.success('Disconnected from Petra wallet');
+    // State is already cleared locally when disconnect is called.
+    toast.success('Disconnected from Petra wallet.');
   }
 
-  // Public API methods
+  // --- Public API Methods ---
 
-  // Connect to Petra wallet via deep link
   async connect(): Promise<void> {
     try {
-      // Check if we're on mobile
-      const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
-      
-      if (!isMobile) {
-        throw new Error('Deep linking is only available on mobile devices');
+      if (!/Android|iPhone|iPad|iPod/i.test(navigator.userAgent)) {
+        throw new Error('Petra deep linking is only available on mobile devices.');
       }
 
       const keyPair = this.generateAndSaveKeyPair();
@@ -291,108 +256,136 @@ export class PetraDeepLinkService {
       const data = {
         appInfo: APP_INFO,
         redirectLink: `${DAPP_LINK_BASE}/connect`,
-        dappEncryptionPublicKey: this.arrayToBase64(keyPair.publicKey)
+        // FIXED: Use hex encoding for the public key as per documentation.
+        dappEncryptionPublicKey: this.arrayToHex(keyPair.publicKey)
       };
 
       const deepLinkUrl = `${PETRA_LINK_BASE}/connect?data=${btoa(JSON.stringify(data))}`;
       
-      toast('Opening Petra wallet...', {
-        icon: '📱',
-        duration: 2000,
-      });
-
-      // Open Petra app
+      toast('Opening Petra wallet...', { icon: '📱' });
       window.location.href = deepLinkUrl;
-    } catch (error) {
+    } catch (error: any) {
       console.error('Connection failed:', error);
-      toast.error('Failed to connect to Petra wallet');
+      toast.error(`Failed to connect: ${error?.message || 'Unknown error'}`);
       throw error;
     }
   }
 
-  // Disconnect from Petra wallet
   async disconnect(): Promise<void> {
     try {
       if (!this.connectionState.publicKey) {
-        throw new Error('No active connection to disconnect');
+        // Already disconnected or never connected, no action needed.
+        this.clearConnectionState();
+        return;
       }
 
       const data = {
         appInfo: APP_INFO,
         redirectLink: `${DAPP_LINK_BASE}/disconnect`,
-        dappEncryptionPublicKey: this.arrayToBase64(this.connectionState.publicKey)
+        // FIXED: Use hex encoding for the public key.
+        dappEncryptionPublicKey: this.arrayToHex(this.connectionState.publicKey)
       };
 
       const deepLinkUrl = `${PETRA_LINK_BASE}/disconnect?data=${btoa(JSON.stringify(data))}`;
       
-      // Clear local state immediately
+      // Clear local state immediately.
       this.clearConnectionState();
-      this.notifyListeners();
 
-      // Open Petra app to complete disconnection
+      // Open Petra app to complete disconnection on the wallet side.
       window.location.href = deepLinkUrl;
-    } catch (error) {
+    } catch (error: any) {
       console.error('Disconnection failed:', error);
-      toast.error('Failed to disconnect from Petra wallet');
+      toast.error(`Failed to disconnect: ${error?.message || 'Unknown error'}`);
       throw error;
     }
   }
 
-  // Sign and submit transaction via deep link
-  async signAndSubmitTransaction(payload: any): Promise<void> {
-    try {
-      if (!this.connectionState.isConnected || !this.connectionState.sharedKey || !this.connectionState.publicKey) {
-        throw new Error('Not connected to Petra wallet');
-      }
+  async signAndSubmitTransaction(payload: object): Promise<void> {
+    if (!this.connectionState.isConnected || !this.connectionState.sharedKey || !this.connectionState.publicKey) {
+      throw new Error('Not connected to Petra wallet. Please connect first.');
+    }
 
+    try {
       const nonce = nacl.randomBytes(24);
       
-      // Encrypt the payload
+      // The payload must be stringified before being converted to a Buffer for encryption.
+      const payloadBytes = new TextEncoder().encode(JSON.stringify(payload));
+      
       const encryptedPayload = nacl.box.after(
-        Buffer.from(JSON.stringify(payload)),
+        payloadBytes,
         nonce,
         this.connectionState.sharedKey
       );
 
       const data = {
         appInfo: APP_INFO,
-        payload: this.arrayToBase64(encryptedPayload),
+        // FIXED: Use hex encoding for payload, publicKey, and nonce.
+        payload: this.arrayToHex(encryptedPayload),
         redirectLink: `${DAPP_LINK_BASE}/response`,
-        dappEncryptionPublicKey: this.arrayToBase64(this.connectionState.publicKey),
-        nonce: this.arrayToBase64(nonce)
+        dappEncryptionPublicKey: this.arrayToHex(this.connectionState.publicKey),
+        nonce: this.arrayToHex(nonce)
       };
 
       const deepLinkUrl = `${PETRA_LINK_BASE}/signAndSubmit?data=${btoa(JSON.stringify(data))}`;
       
-      toast('Opening Petra wallet to sign transaction...', {
-        icon: '📱',
-        duration: 2000,
-      });
-
-      // Open Petra app
+      toast('Opening Petra to sign transaction...', { icon: '✍️' });
       window.location.href = deepLinkUrl;
-    } catch (error) {
+    } catch (error: any) {
       console.error('Transaction signing failed:', error);
-      toast.error('Failed to sign transaction');
+      toast.error(`Transaction signing failed: ${error?.message || 'Unknown error'}`);
       throw error;
     }
   }
 
-  // Get current connection state
+  // ADDED: Implemented the missing `signMessage` functionality.
+  async signMessage(message: string): Promise<void> {
+    if (!this.connectionState.isConnected || !this.connectionState.sharedKey || !this.connectionState.publicKey) {
+        throw new Error('Not connected to Petra wallet. Please connect first.');
+    }
+
+    try {
+        const nonce = nacl.randomBytes(24);
+        const messageBytes = new TextEncoder().encode(message);
+
+        const encryptedPayload = nacl.box.after(
+            messageBytes,
+            nonce,
+            this.connectionState.sharedKey
+        );
+
+        const data = {
+            appInfo: APP_INFO,
+            // FIXED: Use hex encoding for all cryptographic fields.
+            payload: this.arrayToHex(encryptedPayload),
+            redirectLink: `${DAPP_LINK_BASE}/response`,
+            dappEncryptionPublicKey: this.arrayToHex(this.connectionState.publicKey),
+            nonce: this.arrayToHex(nonce)
+        };
+
+        const deepLinkUrl = `${PETRA_LINK_BASE}/signMessage?data=${btoa(JSON.stringify(data))}`;
+
+        toast('Opening Petra to sign message...', { icon: '✍️' });
+        window.location.href = deepLinkUrl;
+    } catch (error: any) {
+        console.error('Message signing failed:', error);
+        toast.error(`Message signing failed: ${error?.message || 'Unknown error'}`);
+        throw error;
+    }
+  }
+
+
+  // --- State Management ---
+
   getConnectionState(): PetraConnectionState {
     return { ...this.connectionState };
   }
 
-  // Subscribe to connection state changes
   onStateChange(listener: (state: PetraConnectionState) => void): () => void {
     this.listeners.push(listener);
     
-    // Return unsubscribe function
     return () => {
       const index = this.listeners.indexOf(listener);
-      if (index > -1) {
-        this.listeners.splice(index, 1);
-      }
+      if (index > -1) this.listeners.splice(index, 1);
     };
   }
 
@@ -407,5 +400,4 @@ export class PetraDeepLinkService {
   }
 }
 
-// Export singleton instance
 export const petraDeepLinkService = new PetraDeepLinkService();
