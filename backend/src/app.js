@@ -6,6 +6,16 @@ const cors = require("cors");
 const apiRoutes = require("./routes/apiRoutes");
 const app = express();
 
+// Log memory usage every 30 minutes
+setInterval(() => {
+    const memoryUsage = process.memoryUsage();
+    const rssMb = (memoryUsage.rss / 1024 / 1024).toFixed(2); // Resident Set Size
+    const heapTotalMb = (memoryUsage.heapTotal / 1024 / 1024).toFixed(2);
+    const heapUsedMb = (memoryUsage.heapUsed / 1024 / 1024).toFixed(2);
+
+    console.log(`[PERF_LOG] Memory Usage: RSS=${rssMb}MB, HeapTotal=${heapTotalMb}MB, HeapUsed=${heapUsedMb}MB`);
+}, 1800000); // 30 minutes in milliseconds
+
 // CORS configuration
 const corsOptions = {
   origin: process.env.FRONTEND_URL || [
