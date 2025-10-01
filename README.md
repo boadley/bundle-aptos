@@ -1,6 +1,6 @@
 # Bundle: The OpenRouter for Fiat
 
-![Bundle Logo](https://github.com/boadley/bundle/blob/main/media/bundle_logo_128_128.png)
+![Bundle Logo](https://github.com/boadley/bundle-aptos/blob/main/media/bundle_logo_128_128.png)
 
 **The financial super-app that connects the global crypto economy to everyday Nigerian commerce.**
 
@@ -9,14 +9,14 @@
 | **Quick Links** | |
 |---|---|
 | 🚀 **Live App Demo** | [bundle-aptos.splashycm.xyz](https://bundle-aptos.splashycm.xyz) (_Optimized for mobile_) |
-| 🎬 **Watch the 3-Min Video Pitch** | [Watch on YouTube](https://youtube.com/shorts/KMTt3MfA0Qs?feature=share) |
+| 🎬 **Watch the 3-Min Video Pitch** | [Watch on YouTube](https://youtube.com/shorts/BySNTIsQe4Y?feature=share) |
 | 📊 **View the Pitch Deck** | [Pitch Deck Link](https://the-future-is-bundled-ap-ppk4lx9.gamma.site/) |
 
 ---
 
 ## 🎬 The Demo Video (The Best Place to Start)
 
-<a href="https://youtube.com/shorts/KMTt3MfA0Qs?feature=share"><img src="https://github.com/boadley/bundle/blob/main/media/bundle_video_thumbnail.jpg" alt="Bundle Demo Video Screenshot" width="300"></a>
+<a href="https://youtube.com/shorts/BySNTIsQe4Y?feature=share"><img src="https://github.com/boadley/bundle-aptos/blob/main/media/bundle_video_thumbnail.jpg" alt="Bundle Demo Video Screenshot" width="300"></a>
 <br>
 **(Click the image to watch the 3-minute video)**
 
