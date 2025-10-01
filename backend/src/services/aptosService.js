@@ -2,7 +2,7 @@
 // Refactored from hederaService.js: Handles transaction confirmation via Nodit API polling
 // Frontend submits signed tx hash; here we poll Nodit until success or timeout
 // No signing on backend; user wallet signs frontend-side
-console.log('--- 3. Loading aptosService.js ---')
+console.log('--- 3. Loading aptosService.js ---');
 
 const { Aptos, AptosConfig, Network, AccountAddress } = require('@aptos-labs/ts-sdk');
 const axios = require('axios');
